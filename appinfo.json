@@ -33,10 +33,7 @@
   "sdkVersion": "3",
   "shortName": "Send DM",
   "targetPlatforms": [
-    "basalt",
-    "chalk",
-    "diorite",
-    "emery"
+    "basalt"
   ],
   "uuid": "19a7512c-1ba8-4576-9d44-69b797bca74d",
   "versionCode": 1,

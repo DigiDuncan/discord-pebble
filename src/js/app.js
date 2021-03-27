@@ -11,14 +11,14 @@ var contacts = [];
 
 var configPromptCard = new UI.Card({
 	fullscreen: false,
-	title: 'Configure on phone',
+	title: 'Hello, DigiDuncan!',
 	titleColor: 'black'
 });
 
 var errorCard = new UI.Card({
 	fullscreen: false,
 	title: 'Something went wrong:',
-	subtitle: 'Check that your token is correct!',
+	subtitle: 'Digi doesn\'t know JS!',
 	titleColor: 'black',
 	backgroundColor: 'yellow',
 });
@@ -49,6 +49,21 @@ var contactsMenu = new UI.Menu({
 	textColor: 'black',
 	highlightBackgroundColor: 'liberty',
 	highlightTextColor: 'black',
+});
+
+var responsesMenu = new UI.Menu({
+	fullscreen:false,
+	backgroundColor: 'white',
+	textColor: 'black',
+	highlightBackgroundColor: 'liberty',
+	highlightTextColor: 'black',
+	sections: [
+		{items: [
+			{title: Settings.option('response1')},
+			{title: Settings.option('response2')},
+			{title: Settings.option('response3')}
+		]}
+	]
 });
 
 Pebble.addEventListener('showConfiguration', function(e) {
@@ -122,7 +137,7 @@ var getContacts = function(arrayContacts, token){
 
 Pebble.addEventListener('webviewclosed', function(e) {
 	if (e && !e.response) {
-		console.log('something went wrong');
+		console.log(JSON.stringify(e, null, 4));
 		return;
 	}
 
@@ -130,6 +145,7 @@ Pebble.addEventListener('webviewclosed', function(e) {
 	Settings.option(dict);
 	Settings.option('token', Settings.option('token').replace(/['"]+/g, ''));
 	console.log('set settings');
+	console.log(Settings.option('response1'));
 
 	getContacts(contacts, Settings.option('token'));
 	loadingCard.show();
@@ -148,34 +164,32 @@ if(token && contacts && contacts.length){
 	configPromptCard.show();
 }
 
+var selectedContact;
+
+
 contactsMenu.on('select', function(selection){
-	var selectedContact = contacts[selection.itemIndex];
+	selectedContact = contacts[selection.itemIndex];
+	responsesMenu.show();
+});
 
-	console.log('transcribing');
+responsesMenu.on('select', function(selection){
+	var message = selection.item.title;
+	console.log(message);
+	console.log('sending message');
 
-	Voice.dictate('start', true, function(input) {
-		if (input.err) {
-			console.log('Error: ' + input.err);
-			sendingMessageCard.hide();
-			return;
-		}
+	var ajaxURL = 'https://discordapp.com/api/channels/' + selectedContact.id + '/messages';
+	var ajaxHeaders = { 'Authorization' : token };
+	var ajaxData = { 'content' : message };
+	var ajaxParams = { url: ajaxURL, type: 'json',
+		method: 'post', data: ajaxData, headers: ajaxHeaders };
 
-		console.log('sending message');
-
-		var ajaxURL = 'https://discordapp.com/api/channels/' + selectedContact.id + '/messages';
-		var ajaxHeaders = { 'Authorization' : token };
-		var ajaxData = { 'content' : input.transcription };
-		var ajaxParams = { url: ajaxURL, type: 'json',
-			method: 'post', data: ajaxData, headers: ajaxHeaders };
-
-		ajax(ajaxParams, function(data){
-			console.log('message sent!');
-			sentMessageCard.show();
-		}, function(data){
-			console.log('sending message failed' + JSON.stringify(data) );
-			errorCard.body = "" + data;
-			errorCard.show();
-		});
+	ajax(ajaxParams, function(data){
+		console.log('message sent!');
+		sentMessageCard.show();
+	}, function(error){
+		console.log('sending message failed' + JSON.stringify(error) );
+		errorCard.body = "" + error;
+		errorCard.show();
 	});
 
 	sendingMessageCard.show();
@@ -184,6 +198,7 @@ contactsMenu.on('select', function(selection){
 errorCard.on('show', function(){
 	loadingCard.hide();
 	contactsMenu.hide();
+	responsesMenu.hide();
 	sendingMessageCard.hide();
 });
 
@@ -197,10 +212,12 @@ contactsMenu.on('show', function(){
 
 sentMessageCard.on('show', function(){
 	contactsMenu.hide();
+	responsesMenu.hide();
 	sendingMessageCard.hide();
 
 	setTimeout(() => {
 
+		contactsMenu.show();
 		sentMessageCard.hide();
 
 		}, 1000);
