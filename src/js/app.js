@@ -1,226 +1,228 @@
-var UI = require('ui');
-var Voice = require('ui/voice');
-var Settings = require('settings');
-var Clay = require('clay');
-var clayConfig = require('config');
+var UI = require("ui");
+var Voice = require("ui/voice");
+var Settings = require("settings");
+var Clay = require("clay");
+var clayConfig = require("config");
 var clay = new Clay(clayConfig, null, {autoHandleEvents: false});
-var ajax = require('ajax');
+var ajax = require("ajax");
 
 var token = "";
 var contacts = [];
 
 var configPromptCard = new UI.Card({
-	fullscreen: false,
-	title: 'Hello, DigiDuncan!',
-	titleColor: 'black'
+    fullscreen: false,
+    title: "Hello, DigiDuncan!",
+    titleColor: "black"
 });
 
 var errorCard = new UI.Card({
-	fullscreen: false,
-	title: 'Something went wrong:',
-	subtitle: 'Digi doesn\'t know JS!',
-	titleColor: 'black',
-	backgroundColor: 'yellow',
+    fullscreen: false,
+    title: "Something went wrong:",
+    subtitle: "Digi doesn't know JS!",
+    titleColor: "black",
+    backgroundColor: "yellow"
 });
 
 var loadingCard = new UI.Card({
-	fullscreen: false,
-	title: 'Gettings contacts...',
-	titleColor: 'black',
+    fullscreen: false,
+    title: "Gettings contacts...",
+    titleColor: "black"
 });
 
 var sendingMessageCard = new UI.Card({
-	fullscreen: false,
-	title: 'Sending...',
-	titleColor: 'black',
-	backgroundColor: '#aaaaaa',
+    fullscreen: false,
+    title: "Sending...",
+    titleColor: "black",
+    backgroundColor: "#aaaaaa"
 });
 
 var sentMessageCard = new UI.Card({
-	fullscreen: false,
-	title: 'Message sent :)',
-	titleColor: 'black',
-	backgroundColor: '#aaaaaa',
+    fullscreen: false,
+    title: "Message sent :)",
+    titleColor: "black",
+    backgroundColor: "#aaaaaa"
 });
 
 var contactsMenu = new UI.Menu({
-	fullscreen:false,
-	backgroundColor: 'white',
-	textColor: 'black',
-	highlightBackgroundColor: 'liberty',
-	highlightTextColor: 'black',
+    fullscreen:false,
+    backgroundColor: "white",
+    textColor: "black",
+    highlightBackgroundColor: "liberty",
+    highlightTextColor: "black"
 });
 
 var responsesMenu = new UI.Menu({
-	fullscreen:false,
-	backgroundColor: 'white',
-	textColor: 'black',
-	highlightBackgroundColor: 'liberty',
-	highlightTextColor: 'black',
-	sections: [
-		{items: [
-			{title: Settings.option('response1')},
-			{title: Settings.option('response2')},
-			{title: Settings.option('response3')}
-		]}
-	]
+    fullscreen:false,
+    backgroundColor: "white",
+    textColor: "black",
+    highlightBackgroundColor: "liberty",
+    highlightTextColor: "black",
+    sections: [
+        {items: [
+            {title: Settings.option("response1")},
+            {title: Settings.option("response2")},
+            {title: Settings.option("response3")}
+        ]}
+    ]
 });
 
-Pebble.addEventListener('showConfiguration', function(e) {
-	Pebble.openURL(clay.generateUrl());
-	console.log('showed settings');
+Pebble.addEventListener("showConfiguration", function(e) {
+    Pebble.openURL(clay.generateUrl());
+    console.log("showed settings");
 });
 
 var populateContactsMenu = function(arrayContacts){
-	for(var i = 0; i < arrayContacts.length; i++){
-		var contact = arrayContacts[i];
+    for(var i = 0; i < arrayContacts.length; i++){
+        var contact = arrayContacts[i];
 
-		var name = "";
+        var name = "";
 
-		if(contact.name){
-			name = contact.name;
-		}else{
-			var lastIndex = contact.recipients.length - 1;
-			for(var j = 0; j < contact.recipients.length; j++){
-				name += contact.recipients[j].username;
-				if(j < lastIndex){
-					name += ", ";
-				}
-			}
-		}
+        if(contact.name){
+            name = contact.name;
+        }
+        else{
+            var lastIndex = contact.recipients.length - 1;
+            for(var j = 0; j < contact.recipients.length; j++){
+                name += contact.recipients[j].username;
+                if(j < lastIndex){
+                    name += ", ";
+                }
+            }
+        }
 
-		if(contacts[i])
-		contactsMenu.item(0, i, { title: name });
-	}
+        if(contacts[i]) {
+            contactsMenu.item(0, i, { title: name });
+        }
+    }
 };
 
 var getContacts = function(arrayContacts, token){
-	console.log('getting contacts');
+    console.log("getting contacts");
 
-	var ajaxURL = 'https://discord.com/api/users/@me/channels';
-	var ajaxHeaders = { 'Authorization' : Settings.option('token')};
-	var ajaxParams = { url: ajaxURL, type: 'json', method: 'get', headers: ajaxHeaders };
+    var ajaxURL = "https://discord.com/api/users/@me/channels";
+    var ajaxHeaders = { "Authorization" : Settings.option("token")};
+    var ajaxParams = { url: ajaxURL, type: "json", method: "get", headers: ajaxHeaders };
 
-	ajax(ajaxParams, function(data){
-		console.log('getting contacts succeeded!');
-		contacts = data;
+    ajax(ajaxParams, function(data){
+        console.log("getting contacts succeeded!");
+        contacts = data;
 
-		// sort contacts based on who messaged last
-		contacts.sort(function(a, b){
+        // sort contacts based on who messaged last
+        contacts.sort(function(a, b){
 
-			//using last_message_id, we can derive time the last message was sent
-			//as discord tokens are partially generated by timestamp
-			sA = 0;
-			if(a.last_message_id) {
-				var str = parseInt(a.last_message_id).toString(2);
-				sA = parseInt(str.substring(0, 42 - 64 + str.length), 2);
-			}
-			sB = 0;
-			if(b.last_message_id) {
-				var str = parseInt(b.last_message_id).toString(2);
-				sB = parseInt(str.substring(0, 42 - 64 + str.length), 2);
-			}
+            //using last_message_id, we can derive time the last message was sent
+            //as discord tokens are partially generated by timestamp
+            sA = 0;
+            if(a.last_message_id) {
+                var str = parseInt(a.last_message_id).toString(2);
+                sA = parseInt(str.substring(0, 42 - 64 + str.length), 2);
+            }
+            sB = 0;
+            if(b.last_message_id) {
+                var str = parseInt(b.last_message_id).toString(2);
+                sB = parseInt(str.substring(0, 42 - 64 + str.length), 2);
+            }
 
-			return sB - sA;
-		});
+            return sB - sA;
+        });
 
-		Settings.data('contacts', contacts);
+        Settings.data("contacts", contacts);
 
-		populateContactsMenu(contacts);
-		contactsMenu.show();
-	}, function(data){
-		console.log('getting contacts failed' + JSON.stringify(data) );
-		errorCard.body = "" + data;
-		errorCard.show();
-	});
-}
+        populateContactsMenu(contacts);
+        contactsMenu.show();
+    }, function(data){
+        console.log("getting contacts failed" + JSON.stringify(data) );
+        errorCard.body = "" + data;
+        errorCard.show();
+    });
+};
 
-Pebble.addEventListener('webviewclosed', function(e) {
-	if (e && !e.response) {
-		console.log(JSON.stringify(e, null, 4));
-		return;
-	}
+Pebble.addEventListener("webviewclosed", function(e) {
+    if (e && !e.response) {
+        console.log(JSON.stringify(e, null, 4));
+        return;
+    }
 
-	var dict = clay.getSettings(e.response);
-	Settings.option(dict);
-	Settings.option('token', Settings.option('token').replace(/['"]+/g, ''));
-	console.log('set settings');
-	console.log(Settings.option('response1'));
+    var dict = clay.getSettings(e.response);
+    Settings.option(dict);
+    Settings.option("token", Settings.option("token").replace(/['"]+/g, ""));
+    console.log("set settings");
+    console.log(Settings.option("response1"));
 
-	getContacts(contacts, Settings.option('token'));
-	loadingCard.show();
+    getContacts(contacts, Settings.option("token"));
+    loadingCard.show();
 });
 
-contacts = Settings.data('contacts');
-token = Settings.option('token');
+contacts = Settings.data("contacts");
+token = Settings.option("token");
 
 if(token && contacts && contacts.length){
-	populateContactsMenu(contacts);
-	contactsMenu.show();
-	configPromptCard.hide();
-	errorCard.hide();
-	loadingCard.hide();
-}else{
-	configPromptCard.show();
+    populateContactsMenu(contacts);
+    contactsMenu.show();
+    configPromptCard.hide();
+    errorCard.hide();
+    loadingCard.hide();
+}
+else{
+    configPromptCard.show();
 }
 
 var selectedContact;
 
-
-contactsMenu.on('select', function(selection){
-	selectedContact = contacts[selection.itemIndex];
-	responsesMenu.show();
+contactsMenu.on("select", function(selection){
+    selectedContact = contacts[selection.itemIndex];
+    responsesMenu.show();
 });
 
-responsesMenu.on('select', function(selection){
-	var message = selection.item.title;
-	console.log(message);
-	console.log('sending message');
+responsesMenu.on("select", function(selection){
+    var message = selection.item.title;
+    console.log(message);
+    console.log("sending message");
 
-	var ajaxURL = 'https://discordapp.com/api/channels/' + selectedContact.id + '/messages';
-	var ajaxHeaders = { 'Authorization' : token };
-	var ajaxData = { 'content' : message };
-	var ajaxParams = { url: ajaxURL, type: 'json',
-		method: 'post', data: ajaxData, headers: ajaxHeaders };
+    var ajaxURL = "https://discordapp.com/api/channels/" + selectedContact.id + "/messages";
+    var ajaxHeaders = { "Authorization" : token };
+    var ajaxData = { "content" : message };
+    var ajaxParams = { url: ajaxURL, type: "json",
+        method: "post", data: ajaxData, headers: ajaxHeaders };
 
-	ajax(ajaxParams, function(data){
-		console.log('message sent!');
-		sentMessageCard.show();
-	}, function(error){
-		console.log('sending message failed' + JSON.stringify(error) );
-		errorCard.body = "" + error;
-		errorCard.show();
-	});
+    ajax(ajaxParams, function(data){
+        console.log("message sent!");
+        sentMessageCard.show();
+    }, function(error){
+        console.log("sending message failed" + JSON.stringify(error) );
+        errorCard.body = "" + error;
+        errorCard.show();
+    });
 
-	sendingMessageCard.show();
+    sendingMessageCard.show();
 });
 
-errorCard.on('show', function(){
-	loadingCard.hide();
-	contactsMenu.hide();
-	responsesMenu.hide();
-	sendingMessageCard.hide();
+errorCard.on("show", function(){
+    loadingCard.hide();
+    contactsMenu.hide();
+    responsesMenu.hide();
+    sendingMessageCard.hide();
 });
 
-loadingCard.on('show', function(){
-	configPromptCard.hide();
+loadingCard.on("show", function(){
+    configPromptCard.hide();
 });
 
-contactsMenu.on('show', function(){
-	loadingCard.hide();
+contactsMenu.on("show", function(){
+    loadingCard.hide();
 });
 
-sentMessageCard.on('show', function(){
-	contactsMenu.hide();
-	responsesMenu.hide();
-	sendingMessageCard.hide();
+sentMessageCard.on("show", function(){
+    contactsMenu.hide();
+    responsesMenu.hide();
+    sendingMessageCard.hide();
 
-	setTimeout(() => {
+    setTimeout(() => {
 
-		contactsMenu.show();
-		sentMessageCard.hide();
+        contactsMenu.show();
+        sentMessageCard.hide();
 
-		}, 1000);
+    }, 1000);
 });
 
 // var ws = new WebSocket("wss://gateway.discord.gg/?encoding=json&v=7");
