@@ -66,12 +66,12 @@ var responsesMenu = new UI.Menu({
 });
 
 // eslint-disable-next-line no-unused-vars
-Pebble.addEventListener("showConfiguration", function(e) {
+Pebble.addEventListener("showConfiguration", async function(e) {
     Pebble.openURL(clay.generateUrl());
     console.log("showed settings");
 });
 
-var populateContactsMenu = function(arrayContacts){
+function populateContactsMenu(arrayContacts){
     for(var i = 0; i < arrayContacts.length; i++){
         var contact = arrayContacts[i];
 
@@ -94,10 +94,10 @@ var populateContactsMenu = function(arrayContacts){
             contactsMenu.item(0, i, { title: name });
         }
     }
-};
+}
 
 // eslint-disable-next-line no-unused-vars
-var getContacts = function(arrayContacts, token){
+function getContacts(arrayContacts, token){
     console.log("getting contacts");
 
     var ajaxURL = "https://discord.com/api/users/@me/channels";
@@ -126,9 +126,9 @@ var getContacts = function(arrayContacts, token){
         errorCard.body = "" + data;
         errorCard.show();
     });
-};
+}
 
-Pebble.addEventListener("webviewclosed", function(e) {
+Pebble.addEventListener("webviewclosed", async function(e) {
     if (e && !e.response) {
         console.log(JSON.stringify(e, null, 4));
         return;
@@ -144,28 +144,31 @@ Pebble.addEventListener("webviewclosed", function(e) {
     loadingCard.show();
 });
 
-contacts = Settings.data("contacts");
-token = Settings.option("token");
+async function init() {
+    contacts = Settings.data("contacts");
+    token = Settings.option("token");
 
-if(token && contacts && contacts.length){
-    populateContactsMenu(contacts);
-    contactsMenu.show();
-    configPromptCard.hide();
-    errorCard.hide();
-    loadingCard.hide();
+    if(token && contacts && contacts.length){
+        populateContactsMenu(contacts);
+        contactsMenu.show();
+        configPromptCard.hide();
+        errorCard.hide();
+        loadingCard.hide();
+    }
+    else{
+        configPromptCard.show();
+    }
 }
-else{
-    configPromptCard.show();
-}
+init();
 
 var selectedContact;
 
-contactsMenu.on("select", function(selection){
+contactsMenu.on("select", async function(selection){
     selectedContact = contacts[selection.itemIndex];
     responsesMenu.show();
 });
 
-responsesMenu.on("select", function(selection){
+responsesMenu.on("select", async function(selection){
     var message = selection.item.title;
     console.log(message);
     console.log("sending message");
@@ -189,30 +192,28 @@ responsesMenu.on("select", function(selection){
     sendingMessageCard.show();
 });
 
-errorCard.on("show", function(){
+errorCard.on("show", async function(){
     loadingCard.hide();
     contactsMenu.hide();
     responsesMenu.hide();
     sendingMessageCard.hide();
 });
 
-loadingCard.on("show", function(){
+loadingCard.on("show", async function(){
     configPromptCard.hide();
 });
 
-contactsMenu.on("show", function(){
+contactsMenu.on("show", async function(){
     loadingCard.hide();
 });
 
-sentMessageCard.on("show", function(){
+sentMessageCard.on("show", async function(){
     contactsMenu.hide();
     responsesMenu.hide();
     sendingMessageCard.hide();
 
     setTimeout(() => {
-
         contactsMenu.show();
         sentMessageCard.hide();
-
     }, 1000);
 });
