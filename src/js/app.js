@@ -4,6 +4,7 @@ var Clay = require("clay");
 var clayConfig = require("config");
 var clay = new Clay(clayConfig, null, {autoHandleEvents: false});
 var discord = require("discord");
+var utils = require("utils");
 
 var contactIds = [];
 var selectedContactId = null;
@@ -168,8 +169,7 @@ sentMessageCard.on("show", async function(){
     responsesMenu.hide();
     sendingMessageCard.hide();
 
-    setTimeout(() => {
-        contactsMenu.show();
-        sentMessageCard.hide();
-    }, 1000);
+    await utils.delay(1000);
+    contactsMenu.show();
+    sentMessageCard.hide();
 });
