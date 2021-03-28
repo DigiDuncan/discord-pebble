@@ -147,6 +147,8 @@ function getResponses() {
     var responses = ["response1", "response2", "response3"]
         .map(r => Settings.option(r))
         .filter(r => !!r);
+    responses.unshift("Voice Text");
+    responses.unshift("Voice Recording");
     console.log("Loaded responses: " + responses);
     return responses;
 }
