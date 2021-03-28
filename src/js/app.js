@@ -5,7 +5,8 @@ var clayConfig = require("config");
 var clay = new Clay(clayConfig, null, {autoHandleEvents: false});
 var discord = require("discord");
 
-var contacts = [];
+var contactIds = [];
+var selectedContactId = null;
 
 var configPromptCard = new UI.Card({
     fullscreen: false,
@@ -70,29 +71,16 @@ Pebble.addEventListener("showConfiguration", async function(e) {
     console.log("showed settings");
 });
 
-function populateContactsMenu(arrayContacts){
-    for(var i = 0; i < arrayContacts.length; i++){
-        var contact = arrayContacts[i];
-
-        var name = "";
-
-        if(contact.name){
-            name = contact.name;
+function populateContacts(contacts){
+    contactIds = contacts.map(c => c.id);
+    var items = contacts.map(function(contact) {
+        var name = contact.name;
+        if (!name) {
+            name = contact.recipients.map(r => r.username).join(", ");
         }
-        else{
-            var lastIndex = contact.recipients.length - 1;
-            for(var j = 0; j < contact.recipients.length; j++){
-                name += contact.recipients[j].username;
-                if(j < lastIndex){
-                    name += ", ";
-                }
-            }
-        }
-
-        if(contacts[i]) {
-            contactsMenu.item(0, i, { title: name });
-        }
-    }
+        return { title: name };
+    });
+    contactsMenu.items(0, items);
 }
 
 // eslint-disable-next-line no-unused-vars
@@ -105,7 +93,7 @@ async function getContacts() {
         return;
     }
     Settings.data("contacts", contacts);
-    populateContactsMenu(contacts);
+    populateContacts(contacts);
     contactsMenu.show();
 }
 
@@ -121,15 +109,15 @@ Pebble.addEventListener("webviewclosed", async function(e) {
     console.log("set settings");
     console.log(Settings.option("response1"));
 
-    getContacts(contacts, Settings.option("token"));
+    getContacts(Settings.option("token"));
     loadingCard.show();
 });
 
 async function init() {
-    contacts = Settings.data("contacts");
+    var contacts = Settings.data("contacts");
 
     if(Settings.option("token") && contacts && contacts.length){
-        populateContactsMenu(contacts);
+        populateContacts(contacts);
         contactsMenu.show();
         configPromptCard.hide();
         errorCard.hide();
@@ -141,10 +129,9 @@ async function init() {
 }
 init();
 
-var selectedContact;
-
 contactsMenu.on("select", async function(selection){
-    selectedContact = contacts[selection.itemIndex];
+    selectedContactId = contactIds[selection.itemIndex];
+    console.log("Selected contact id: " + selectedContactId);
     responsesMenu.show();
 });
 
@@ -154,7 +141,7 @@ responsesMenu.on("select", async function(selection){
 
     sendingMessageCard.show();
     try {
-        await discord.sendMessage(selectedContact.id, message, Settings.option("token"));
+        await discord.sendMessage(selectedContactId, message, Settings.option("token"));
     }
     catch (err) {
         showError(err);
