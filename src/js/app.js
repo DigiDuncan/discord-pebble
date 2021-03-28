@@ -5,7 +5,6 @@ var clayConfig = require("config");
 var clay = new Clay(clayConfig, null, {autoHandleEvents: false});
 var discord = require("discord");
 
-var token = "";
 var contacts = [];
 
 var configPromptCard = new UI.Card({
@@ -128,9 +127,8 @@ Pebble.addEventListener("webviewclosed", async function(e) {
 
 async function init() {
     contacts = Settings.data("contacts");
-    token = Settings.option("token");
 
-    if(token && contacts && contacts.length){
+    if(Settings.option("token") && contacts && contacts.length){
         populateContactsMenu(contacts);
         contactsMenu.show();
         configPromptCard.hide();
