@@ -24,7 +24,7 @@ var errorCard = new UI.Card({
 
 var loadingCard = new UI.Card({
     fullscreen: false,
-    title: "Gettings contacts...",
+    title: "Getting contacts...",
     titleColor: "black"
 });
 

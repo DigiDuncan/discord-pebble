@@ -1,4 +1,3 @@
-
 var ajaxsync = require("ajax");
 
 async function ajax(params) {
@@ -31,6 +30,8 @@ module.exports.getContacts = async function(token){
         var b_id = parseInt(b.last_message_id, 10);
         return b_id - a_id;
     });
+
+    return contacts;
 };
 
 module.exports.sendMessage = async function sendMessage(contactId, message, token) {
