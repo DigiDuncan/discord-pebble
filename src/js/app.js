@@ -9,11 +9,6 @@ var utils = require("utils");
 var contactIds = [];
 var selectedContactId = null;
 
-var configPromptCard = new UI.Card({
-    title: "Hello, DigiDuncan!",
-    titleColor: "black"
-});
-
 var errorCard = new UI.Card({
     title: "Something went wrong:",
     subtitle: "Digi doesn't know JS!",
@@ -21,9 +16,32 @@ var errorCard = new UI.Card({
     backgroundColor: "yellow"
 });
 
-var loadingCard = new UI.Card({
-    title: "Getting contacts...",
+var configPromptCard = new UI.Card({
+    title: "Please configure on your phone",
     titleColor: "black"
+});
+
+var loadingCard = new UI.Card({
+    title: "Please wait...",
+    titleColor: "black"
+});
+
+loadingCard.on("show", async function(){
+    configPromptCard.hide();
+});
+
+var contactsMenu = new UI.Menu({
+    backgroundColor: "white",
+    textColor: "black",
+    highlightBackgroundColor: "liberty",
+    highlightTextColor: "black"
+});
+
+var responsesMenu = new UI.Menu({
+    backgroundColor: "white",
+    textColor: "black",
+    highlightBackgroundColor: "liberty",
+    highlightTextColor: "black"
 });
 
 var sendingMessageCard = new UI.Card({
@@ -38,25 +56,10 @@ var sentMessageCard = new UI.Card({
     backgroundColor: "#aaaaaa"
 });
 
-var contactsMenu = new UI.Menu({
-    backgroundColor: "white",
-    textColor: "black",
-    highlightBackgroundColor: "liberty",
-    highlightTextColor: "black"
-});
-
-var responsesMenu = new UI.Menu({
-    backgroundColor: "white",
-    textColor: "black",
-    highlightBackgroundColor: "liberty",
-    highlightTextColor: "black",
-    sections: [
-        {items: [
-            {title: Settings.option("response1")},
-            {title: Settings.option("response2")},
-            {title: Settings.option("response3")}
-        ]}
-    ]
+sentMessageCard.on("show", async function(){
+    sendingMessageCard.hide();
+    await utils.delay(1000);
+    sentMessageCard.hide();
 });
 
 // eslint-disable-next-line no-unused-vars
@@ -64,32 +67,6 @@ Pebble.addEventListener("showConfiguration", async function(e) {
     Pebble.openURL(clay.generateUrl());
     console.log("showed settings");
 });
-
-function populateContacts(contacts){
-    contactIds = contacts.map(c => c.id);
-    var items = contacts.map(function(contact) {
-        var name = contact.name;
-        if (!name) {
-            name = contact.recipients.map(r => r.username).join(", ");
-        }
-        return { title: name };
-    });
-    contactsMenu.items(0, items);
-}
-
-// eslint-disable-next-line no-unused-vars
-async function getContacts() {
-    try {
-        var contacts = await discord.getContacts(Settings.option("token"));
-    }
-    catch (err) {
-        showError(err);
-        return;
-    }
-    Settings.data("contacts", contacts);
-    populateContacts(contacts);
-    contactsMenu.show();
-}
 
 Pebble.addEventListener("webviewclosed", async function(e) {
     if (e && !e.response) {
@@ -99,29 +76,28 @@ Pebble.addEventListener("webviewclosed", async function(e) {
 
     var dict = clay.getSettings(e.response);
     Settings.option(dict);
-    Settings.option("token", Settings.option("token").replace(/['"]+/g, ""));
-    console.log("set settings");
-    console.log(Settings.option("response1"));
 
-    getContacts(Settings.option("token"));
+    var token = Settings.option("token");
+    token = token.replace(/['"]+/g, "");
+    Settings.option("token", token);
+
     loadingCard.show();
-});
-
-async function init() {
-    var contacts = Settings.data("contacts");
-
-    if(Settings.option("token") && contacts && contacts.length){
-        populateContacts(contacts);
-        contactsMenu.show();
-        configPromptCard.hide();
-        errorCard.hide();
+    try {
+        var contacts = await discord.getContacts(token);
+    }
+    catch (err) {
+        showError(err);
         loadingCard.hide();
+        return;
     }
-    else{
-        configPromptCard.show();
-    }
-}
-init();
+    Settings.data("contacts", contacts);
+
+    var responses = getResponses();
+
+    await populateContacts(contacts);
+    await populateResponses(responses);
+    loadingCard.hide();
+});
 
 contactsMenu.on("select", async function(selection){
     selectedContactId = contactIds[selection.itemIndex];
@@ -139,6 +115,7 @@ responsesMenu.on("select", async function(selection){
     }
     catch (err) {
         showError(err);
+        sendingMessageCard.hide();
         return;
     }
     sentMessageCard.show();
@@ -149,27 +126,58 @@ function showError(err) {
     errorCard.show();
 }
 
-errorCard.on("show", async function(){
-    loadingCard.hide();
-    contactsMenu.hide();
-    responsesMenu.hide();
-    sendingMessageCard.hide();
-});
+function populateContacts(contacts) {
+    contactIds = contacts.map(c => c.id);
+    var items = contacts.map(function(contact) {
+        var name = contact.name;
+        if (!name) {
+            name = contact.recipients.map(r => r.username).join(", ");
+        }
+        return { title: name };
+    });
+    contactsMenu.items(0, items);
+}
 
-loadingCard.on("show", async function(){
-    configPromptCard.hide();
-});
+function populateResponses(responses) {
+    var items = responses.map(r => ({ "title": r }));
+    responsesMenu.items(0, items);
+}
 
-contactsMenu.on("show", async function(){
-    loadingCard.hide();
-});
+function getResponses() {
+    var responses = ["response1", "response2", "response3"]
+        .map(r => Settings.option(r))
+        .filter(r => !!r);
+    console.log("Loaded responses: " + responses);
+    return responses;
+}
 
-sentMessageCard.on("show", async function(){
-    contactsMenu.hide();
-    responsesMenu.hide();
-    sendingMessageCard.hide();
+async function init() {
+    var contacts = Settings.data("contacts");
+    var token = Settings.option("token");
+    var responses = getResponses();
 
-    await utils.delay(1000);
+    var hasToken = !!token;
+    var hasContacts = !!(contacts && contacts.length);
+    var hasResponses = !!responses.length;
+
+    if(!(hasToken && hasContacts && hasResponses)){
+        var missing = [];
+        if (!hasToken) {
+            missing.push("token");
+        }
+        if (!hasContacts) {
+            missing.push("contacts");
+        }
+        if (!hasResponses) {
+            missing.push("responses");
+        }
+        configPromptCard.subtitle("Missing: " + missing.join(", "));
+        configPromptCard.show();
+
+        return;
+    }
+    await populateContacts(contacts);
+    await populateResponses(responses);
     contactsMenu.show();
-    sentMessageCard.hide();
-});
+}
+init().catch(console.error);
