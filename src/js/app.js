@@ -9,13 +9,11 @@ var contactIds = [];
 var selectedContactId = null;
 
 var configPromptCard = new UI.Card({
-    fullscreen: false,
     title: "Hello, DigiDuncan!",
     titleColor: "black"
 });
 
 var errorCard = new UI.Card({
-    fullscreen: false,
     title: "Something went wrong:",
     subtitle: "Digi doesn't know JS!",
     titleColor: "black",
@@ -23,27 +21,23 @@ var errorCard = new UI.Card({
 });
 
 var loadingCard = new UI.Card({
-    fullscreen: false,
     title: "Getting contacts...",
     titleColor: "black"
 });
 
 var sendingMessageCard = new UI.Card({
-    fullscreen: false,
     title: "Sending...",
     titleColor: "black",
     backgroundColor: "#aaaaaa"
 });
 
 var sentMessageCard = new UI.Card({
-    fullscreen: false,
     title: "Message sent :)",
     titleColor: "black",
     backgroundColor: "#aaaaaa"
 });
 
 var contactsMenu = new UI.Menu({
-    fullscreen:false,
     backgroundColor: "white",
     textColor: "black",
     highlightBackgroundColor: "liberty",
@@ -51,7 +45,6 @@ var contactsMenu = new UI.Menu({
 });
 
 var responsesMenu = new UI.Menu({
-    fullscreen:false,
     backgroundColor: "white",
     textColor: "black",
     highlightBackgroundColor: "liberty",
