@@ -16,12 +16,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Cellomonster/discord-pebble.git"
+    "url": "git+https://github.com/DigiDuncan/discord-pebble.git"
   },
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/Cellomonster/discord-pebble/issues"
+    "url": "https://github.com/DigiDuncan/discord-pebble/issues"
   },
-  "homepage": "https://github.com/Cellomonster/discord-pebble#readme"
+  "homepage": "https://github.com/DigiDuncan/discord-pebble#readme"
 }
