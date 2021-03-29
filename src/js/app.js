@@ -180,7 +180,7 @@ function populateContacts(contacts) {
 
 function populateResponses(responses) {
     var items = responses.map(r => ({ "title": r }));
-    if (true || Feature.microphone()) {
+    if (Feature.microphone()) {
         items.unshift({ title: "Voice Text", mode: "transcription" });
         items.unshift({ title: "Voice Recording", mode: "recording" });
     }
