@@ -33,6 +33,7 @@
   "sdkVersion": "3",
   "shortName": "Send DM",
   "targetPlatforms": [
+    "aplite",
     "basalt"
   ],
   "uuid": "19a7512c-1ba8-4576-9d44-69b797bca74d",
