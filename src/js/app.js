@@ -1,5 +1,6 @@
 window.console.log = require("betterlog").log;
 var UI = require("ui");
+var Feature = require("platform/feature");
 var Settings = require("settings");
 var Clay = require("clay");
 var clayConfig = require("config");
@@ -106,6 +107,13 @@ responsesMenu.on("select", async function(selection){
     var message = selection.item.title;
     var selectedContactId = contactsMenu.selected.contactId;
 
+    if (selection.item.mode === "transcription") {
+        message = getVoiceTranscription();
+    }
+    else if (selection.item.mode === "recording") {
+        message = getVoiceRecording();
+    }
+
     sendingMessageCard.show();
     try {
         await discord.sendMessage(selectedContactId, message, Settings.option("token"));
@@ -117,6 +125,16 @@ responsesMenu.on("select", async function(selection){
     }
     sentMessageCard.show();
 });
+
+function getVoiceTranscription() {
+    console.log("Sending voice transcription");
+    return "Transcribed Beep";
+}
+
+function getVoiceRecording() {
+    console.log("Sending voice recording");
+    return "Recorded Boop";
+}
 
 function showError(err) {
     errorCard.body = "" + err;
@@ -136,6 +154,10 @@ function populateContacts(contacts) {
 
 function populateResponses(responses) {
     var items = responses.map(r => ({ "title": r }));
+    if (Feature.microphone()) {
+        items.unshift({ title: "Voice Text", mode: "transcription" });
+        items.unshift({ title: "Voice Recording", mode: "recording" });
+    }
     responsesMenu.items(0, items);
 }
 
@@ -143,8 +165,6 @@ function getResponses() {
     var responses = ["response1", "response2", "response3"]
         .map(r => Settings.option(r))
         .filter(r => !!r);
-    responses.unshift("Voice Text");
-    responses.unshift("Voice Recording");
     console.log("Loaded responses: " + responses);
     return responses;
 }
