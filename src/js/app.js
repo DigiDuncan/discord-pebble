@@ -1,5 +1,6 @@
 window.console.log = require("betterlog").log;
 var UI = require("ui");
+var Voice = require("ui/voice");
 var Feature = require("platform/feature");
 var Settings = require("settings");
 var Clay = require("clay");
@@ -41,6 +42,17 @@ var responsesMenu = new UI.Menu({
     textColor: "black",
     highlightBackgroundColor: "liberty",
     highlightTextColor: "black"
+});
+
+var notQuiteYetMenu = new UI.Card({
+    title: "Not quite yet...",
+    titleColor: "black",
+    backgroundColor: "white"
+});
+
+notQuiteYetMenu.on("show", async function() {
+    await utils.delay(1000);
+    notQuiteYetMenu.hide();
 });
 
 var sendingMessageCard = new UI.Card({
@@ -108,10 +120,18 @@ responsesMenu.on("select", async function(selection){
     var selectedContactId = contactsMenu.selected.contactId;
 
     if (selection.item.mode === "transcription") {
-        message = getVoiceTranscription();
+        try {
+            message = await getVoiceTranscription();
+        }
+        catch (err) {
+            console.log("Error: " + err);
+            return;
+        }
     }
     else if (selection.item.mode === "recording") {
-        message = getVoiceRecording();
+        //message = getVoiceRecording();
+        notQuiteYetMenu.show();
+        return;
     }
 
     sendingMessageCard.show();
@@ -126,13 +146,19 @@ responsesMenu.on("select", async function(selection){
     sentMessageCard.show();
 });
 
-function getVoiceTranscription() {
-    console.log("Sending voice transcription");
-    return "Transcribed Beep";
+async function getVoiceTranscription() {
+    return new Promise(function(resolve, reject) {
+        Voice.dictate("start", true, function(result) {
+            if (result.err) {
+                reject(result.err);
+                return;
+            }
+            resolve(result.transcription);
+        });
+    });
 }
 
 function getVoiceRecording() {
-    console.log("Sending voice recording");
     return "Recorded Boop";
 }
 
@@ -154,7 +180,7 @@ function populateContacts(contacts) {
 
 function populateResponses(responses) {
     var items = responses.map(r => ({ "title": r }));
-    if (Feature.microphone()) {
+    if (true || Feature.microphone()) {
         items.unshift({ title: "Voice Text", mode: "transcription" });
         items.unshift({ title: "Voice Recording", mode: "recording" });
     }
@@ -179,19 +205,7 @@ async function init() {
     var hasResponses = !!responses.length;
 
     if(!(hasToken && hasContacts && hasResponses)){
-        var missing = [];
-        if (!hasToken) {
-            missing.push("token");
-        }
-        if (!hasContacts) {
-            missing.push("contacts");
-        }
-        if (!hasResponses) {
-            missing.push("responses");
-        }
-        configPromptCard.subtitle("Missing: " + missing.join(", "));
         configPromptCard.show();
-
         return;
     }
     await populateContacts(contacts);
