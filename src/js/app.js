@@ -1,3 +1,4 @@
+window.console.log = require("betterlog").log;
 var UI = require("ui");
 var Settings = require("settings");
 var Clay = require("clay");
