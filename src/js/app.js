@@ -7,9 +7,6 @@ var clay = new Clay(clayConfig, null, {autoHandleEvents: false});
 var discord = require("discord");
 var utils = require("utils");
 
-var contactIds = [];
-var selectedContactId = null;
-
 var errorCard = new UI.Card({
     title: "Something went wrong:",
     subtitle: "Digi doesn't know JS!",
@@ -101,14 +98,13 @@ Pebble.addEventListener("webviewclosed", async function(e) {
 });
 
 contactsMenu.on("select", async function(selection){
-    selectedContactId = contactIds[selection.itemIndex];
-    console.log("Selected contact id: " + selectedContactId);
+    contactsMenu.selected = selection.item;
     responsesMenu.show();
 });
 
 responsesMenu.on("select", async function(selection){
     var message = selection.item.title;
-    console.log(message);
+    var selectedContactId = contactsMenu.selected.contactId;
 
     sendingMessageCard.show();
     try {
@@ -128,13 +124,12 @@ function showError(err) {
 }
 
 function populateContacts(contacts) {
-    contactIds = contacts.map(c => c.id);
     var items = contacts.map(function(contact) {
         var name = contact.name;
         if (!name) {
             name = contact.recipients.map(r => r.username).join(", ");
         }
-        return { title: name };
+        return { title: name, contactId: contact.id };
     });
     contactsMenu.items(0, items);
 }
