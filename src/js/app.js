@@ -1,4 +1,9 @@
-window.console.log = require("betterlog").log;
+var nconsole = require("nconsole");
+console.debug = nconsole.debug;
+console.info = nconsole.info;
+console.log = nconsole.log;
+console.warn = nconsole.warn;
+console.error = nconsole.error;
 var UI = require("ui");
 var Voice = require("ui/voice");
 var Feature = require("platform/feature");
@@ -191,7 +196,7 @@ function getResponses() {
     var responses = ["response1", "response2", "response3"]
         .map(r => Settings.option(r))
         .filter(r => !!r);
-    console.log("Loaded responses: " + responses);
+    console.log("Loaded responses:", responses);
     return responses;
 }
 
