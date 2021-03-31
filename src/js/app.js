@@ -141,7 +141,8 @@ messagesMenu.on("select", function(selection) {
 });
 
 var messageCard = new UI.Card({
-    scrollable: false
+    scrollable: false,
+    style: "mono"
 });
 
 const showMessage = function(m) {
