@@ -17,6 +17,7 @@ var utils = require("utils");
 var gateway;
 var selectedGuildId = null;
 var selectedChannelId = null;
+var selectedMessageId = null;
 
 var errorCard = new UI.Card({
     title: "Something went wrong:",
@@ -126,7 +127,7 @@ var messagesMenu = new UI.Menu({
 messagesMenu.on("show", function() {
     const channel = gateway.getChannel(selectedGuildId, selectedChannelId);
     const items = channel.messages
-        .map(m => ({ title: m.author, subtitle: m.content, message: m }));
+        .map(m => ({ title: m.author, subtitle: m.content, messageId: m.id }));
     messagesMenu.section(0, {
         title: channel.name,
         items: items
@@ -135,14 +136,37 @@ messagesMenu.on("show", function() {
 });
 
 messagesMenu.on("select", function(selection) {
-    const m = selection.item.message;
-    messageCard.title(m.author);
-    messageCard.body(m.content);
+    selectedMessageId = selection.item.messageId;
     messageCard.show();
 });
 
 var messageCard = new UI.Card({
-    scrollable: true
+    scrollable: false
+});
+
+const showMessage = function(m) {
+    messageCard.title(m.author);
+    messageCard.body(m.content);
+};
+
+messageCard.on("show", function() {
+    const channel = gateway.getChannel(selectedGuildId, selectedChannelId);
+    const m = channel.getMessage(selectedMessageId);
+    showMessage(m);
+});
+
+messageCard.on("click", "up", function() {
+    const channel = gateway.getChannel(selectedGuildId, selectedChannelId);
+    const m = channel.getPrevMessage(selectedMessageId);
+    selectedMessageId = m.id;
+    showMessage(m);
+});
+
+messageCard.on("click", "down", function() {
+    const channel = gateway.getChannel(selectedGuildId, selectedChannelId);
+    const m = channel.getNextMessage(selectedMessageId);
+    selectedMessageId = m.id;
+    showMessage(m);
 });
 
 // Misc

@@ -6,6 +6,10 @@ const ajax = async function(params) {
     });
 };
 
+const clamp = function(min, val, max) {
+    return Math.max(min, Math.min(val, max));
+};
+
 const API_ROOT = "https://discord.com/api";
 
 const discordREST = async function(method, token, path, options) {
@@ -133,6 +137,23 @@ class Channel {
         this.lastMessageId = null;
         this.setLastMessageId(c.last_message_id);
         this.messages = [];
+    }
+
+    getMessage(id) {
+        let msg = this.messages.find(m => m.id === id) || this.messages[0];
+        return msg;
+    }
+
+    getPrevMessage(id) {
+        const msgIndex = this.messages.findIndex(m => m.id === id);
+        const prevMsgIndex = clamp(0, msgIndex - 1, this.messages.length - 1);
+        return this.messages[prevMsgIndex];
+    }
+
+    getNextMessage(id) {
+        const msgIndex = this.messages.findIndex(m => m.id === id);
+        const nextMsgIndex = clamp(0, msgIndex + 1, this.messages.length - 1);
+        return this.messages[nextMsgIndex];
     }
 
     setLastMessageId(id) {
