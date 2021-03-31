@@ -131,6 +131,7 @@ messagesMenu.on("show", function() {
         title: channel.name,
         items: items
     });
+    messagesMenu.selection(0, items.length - 1);
 });
 
 messagesMenu.on("select", function(selection) {
