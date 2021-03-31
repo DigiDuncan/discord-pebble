@@ -92,27 +92,62 @@ const INTENTS = {
     DIRECT_MESSAGE_TYPING: 1 << 14
 };
 
+const compareId = function(a_id, b_id) {
+    if (!a_id) {
+        return -1;
+    }
+    if (!b_id) {
+        return 1;
+    }
+    const a_missing = Math.max(0, b_id.length - a_id.length);
+    const b_missing = Math.max(0, b_id.length - a_id.length);
+    const padded_a_id = "0".repeat(a_missing) + a_id;
+    const padded_b_id = "0".repeat(b_missing) + b_id;
+    if (padded_a_id === padded_b_id) {
+        return 0;
+    }
+    else if (padded_a_id < padded_b_id) {
+        return -1;
+    }
+    else {
+        return 1;
+    }
+};
+
 class Guild {
     constructor(g) {
         this.id = g.id;
         this.name = g.name;
+        this.lastMessageId = null;
         this.channels = g.channels
             .filter(c => Channel.isText(c))
-            .map(c => new Channel(c));
+            .map(c => new Channel(c, this));
     }
 }
 
 class Channel {
-    constructor(c) {
+    constructor(c, guild) {
+        this.guild = guild;
         this.id = c.id;
         this.name = c.name || c.recipients.map(r => r.username).join(", ");
-        this.lastMessageId = c.last_message_id;
+        this.lastMessageId = null;
+        this.setLastMessageId(c.last_message_id);
         this.author = c.author;
         this.messages = [];
     }
 
+    setLastMessageId(id) {
+        this.lastMessageId = id;
+        if (this.guild) {
+            if (this.guild.lastMessageId == null || this.guild.lastMessageId < id) {
+                this.guild.lastMessageId = id;
+            }
+        }
+    }
+
     onMessageCreate(msg) {
         this.messages.push(msg);
+        this.setLastMessageId(msg.id);
         if (this.messages.length > 25) {
             this.messages.unshift();
         }
@@ -170,7 +205,7 @@ class Gateway {
     }
 
     send(data) {
-        console.log("Sending:", data);
+        // console.log("Sending:", data);
         this.ws.send(JSON.stringify(data));
     }
 
@@ -333,5 +368,6 @@ module.exports = {
     getContacts,
     sendMessage,
     getMessages,
-    Gateway
+    Gateway,
+    compareId
 };

@@ -14,6 +14,8 @@ var clay = new Clay(clayConfig, null, {autoHandleEvents: false});
 var discord = require("discord");
 var utils = require("utils");
 
+var gateway;
+
 var errorCard = new UI.Card({
     title: "Something went wrong:",
     subtitle: "Digi doesn't know JS!",
@@ -40,6 +42,61 @@ var contactsMenu = new UI.Menu({
     textColor: "black",
     highlightBackgroundColor: "liberty",
     highlightTextColor: "black"
+});
+
+var guildsMenu = new UI.Menu({
+    backgroundColor: "white",
+    textColor: "black",
+    highlightBackgroundColor: "liberty",
+    highlightTextColor: "black"
+});
+
+guildsMenu.on("show", async function() {
+    console.log(gateway.guilds.filter(g => g.lastMessageId).map(g => g.name));
+    const items = gateway.guilds
+        .sort((a, b) => discord.compareId(b.lastMessageId, a.lastMessageId))
+        .map(g => ({ title: g.name, guildId: g.id }));
+    guildsMenu.items(0, items);
+});
+
+guildsMenu.on("select", async function(selection) {
+    guildsMenu.selected = selection.item;
+    channelsMenu.show();
+});
+
+var channelsMenu = new UI.Menu({
+    backgroundColor: "white",
+    textColor: "black",
+    highlightBackgroundColor: "liberty",
+    highlightTextColor: "black"
+});
+
+channelsMenu.on("show", async function() {
+    const guildId = guildsMenu.selected.guildId;
+    const items = gateway.getGuild(guildId).channels
+        .sort((a, b) => discord.compareId(b.lastMessageId, a.lastMessageId))
+        .map(c => ({ title: c.name, channelId: c.id }));
+    channelsMenu.items(0, items);
+});
+
+channelsMenu.on("select", async function(selection) {
+    channelsMenu.selected = selection.item;
+    messagesMenu.show();
+});
+
+var messagesMenu = new UI.Menu({
+    backgroundColor: "white",
+    textColor: "black",
+    highlightBackgroundColor: "liberty",
+    highlightTextColor: "black"
+});
+
+messagesMenu.on("show", async function() {
+    const guildId = guildsMenu.selected.guildId;
+    const channelId = channelsMenu.selected.channelId;
+    const items = gateway.getChannel(guildId, channelId).messages
+        .map(m => ({ title: m.content, subtitle: m.author, messageId: m.id }));
+    messagesMenu.items(0, items);
 });
 
 var responsesMenu = new UI.Menu({
@@ -117,7 +174,12 @@ Pebble.addEventListener("webviewclosed", async function(e) {
 
 contactsMenu.on("select", async function(selection){
     contactsMenu.selected = selection.item;
-    responsesMenu.show();
+    if (contactsMenu.selected.mode === "guilds") {
+        guildsMenu.show();
+    }
+    else {
+        responsesMenu.show();
+    }
 });
 
 responsesMenu.on("select", async function(selection){
@@ -180,6 +242,7 @@ function populateContacts(contacts) {
         }
         return { title: name, contactId: contact.id };
     });
+    items.unshift({ title: "Servers", mode: "guilds" });
     contactsMenu.items(0, items);
 }
 
@@ -214,8 +277,8 @@ async function init() {
         return;
     }
 
-    var d = new discord.Gateway(token);
-    d.connect();
+    gateway = new discord.Gateway(token);
+    gateway.connect();
 
     await populateContacts(contacts);
     await populateResponses(responses);
