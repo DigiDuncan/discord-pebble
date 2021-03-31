@@ -15,6 +15,8 @@ var discord = require("discord");
 var utils = require("utils");
 
 var gateway;
+var selectedGuildId = null;
+var selectedChannelId = null;
 
 var errorCard = new UI.Card({
     title: "Something went wrong:",
@@ -37,12 +39,37 @@ loadingCard.on("show", async function(){
     configPromptCard.hide();
 });
 
-var contactsMenu = new UI.Menu({
+// Main Menu
+
+var mainMenu = new UI.Menu({
     backgroundColor: "white",
     textColor: "black",
     highlightBackgroundColor: "liberty",
-    highlightTextColor: "black"
+    highlightTextColor: "black",
+    sections: [{
+        items: [
+            { title: "Contacts", mode: "contacts" },
+            { title: "Servers", mode: "guilds" }
+        ]
+    }]
 });
+
+mainMenu.on("show", function() {
+    selectedGuildId = null;
+    selectedChannelId = null;
+});
+
+mainMenu.on("select", function(selection) {
+    if (selection.item.mode === "contacts") {
+        selectedGuildId = null;
+        channelsMenu.show();
+    }
+    else if (selection.item.mode === "guilds") {
+        guildsMenu.show();
+    }
+});
+
+// Guilds
 
 var guildsMenu = new UI.Menu({
     backgroundColor: "white",
@@ -52,7 +79,8 @@ var guildsMenu = new UI.Menu({
 });
 
 guildsMenu.on("show", async function() {
-    console.log(gateway.guilds.filter(g => g.lastMessageId).map(g => g.name));
+    selectedGuildId = null;
+    selectedChannelId = null;
     const items = gateway.guilds
         .sort((a, b) => discord.compareId(b.lastMessageId, a.lastMessageId))
         .map(g => ({ title: g.name, guildId: g.id }));
@@ -60,9 +88,11 @@ guildsMenu.on("show", async function() {
 });
 
 guildsMenu.on("select", async function(selection) {
-    guildsMenu.selected = selection.item;
+    selectedGuildId = selection.item.guildId;
     channelsMenu.show();
 });
+
+// Channels
 
 var channelsMenu = new UI.Menu({
     backgroundColor: "white",
@@ -72,32 +102,49 @@ var channelsMenu = new UI.Menu({
 });
 
 channelsMenu.on("show", async function() {
-    const guildId = guildsMenu.selected.guildId;
-    const items = gateway.getGuild(guildId).channels
+    selectedChannelId = null;
+    const items = gateway.getGuildChannels(selectedGuildId)
         .sort((a, b) => discord.compareId(b.lastMessageId, a.lastMessageId))
         .map(c => ({ title: c.name, channelId: c.id }));
     channelsMenu.items(0, items);
 });
 
 channelsMenu.on("select", async function(selection) {
-    channelsMenu.selected = selection.item;
+    selectedChannelId = selection.item.channelId;
     messagesMenu.show();
 });
+
+// Messages
 
 var messagesMenu = new UI.Menu({
     backgroundColor: "white",
     textColor: "black",
-    highlightBackgroundColor: "liberty",
-    highlightTextColor: "black"
+    highlightBackgroundColor: "black",
+    highlightTextColor: "white"
 });
 
-messagesMenu.on("show", async function() {
-    const guildId = guildsMenu.selected.guildId;
-    const channelId = channelsMenu.selected.channelId;
-    const items = gateway.getChannel(guildId, channelId).messages
-        .map(m => ({ title: m.content, subtitle: m.author, messageId: m.id }));
-    messagesMenu.items(0, items);
+messagesMenu.on("show", function() {
+    const channel = gateway.getChannel(selectedGuildId, selectedChannelId);
+    const items = channel.messages
+        .map(m => ({ title: m.author, subtitle: m.content, message: m }));
+    messagesMenu.section(0, {
+        title: channel.name,
+        items: items
+    });
 });
+
+messagesMenu.on("select", function(selection) {
+    const m = selection.item.message;
+    messageCard.title(m.author);
+    messageCard.body(m.content);
+    messageCard.show();
+});
+
+var messageCard = new UI.Card({
+    scrollable: true
+});
+
+// Misc
 
 var responsesMenu = new UI.Menu({
     backgroundColor: "white",
@@ -155,36 +202,15 @@ Pebble.addEventListener("webviewclosed", async function(e) {
     Settings.option("token", token);
 
     loadingCard.show();
-    try {
-        var contacts = await discord.getContacts(token);
-    }
-    catch (err) {
-        showError(err);
-        loadingCard.hide();
-        return;
-    }
-    Settings.data("contacts", contacts);
 
     var responses = getResponses();
 
-    await populateContacts(contacts);
     await populateResponses(responses);
     loadingCard.hide();
 });
 
-contactsMenu.on("select", async function(selection){
-    contactsMenu.selected = selection.item;
-    if (contactsMenu.selected.mode === "guilds") {
-        guildsMenu.show();
-    }
-    else {
-        responsesMenu.show();
-    }
-});
-
 responsesMenu.on("select", async function(selection){
     var message = selection.item.title;
-    var selectedContactId = contactsMenu.selected.contactId;
 
     if (selection.item.mode === "transcription") {
         try {
@@ -203,7 +229,7 @@ responsesMenu.on("select", async function(selection){
 
     sendingMessageCard.show();
     try {
-        await discord.sendMessage(selectedContactId, message, Settings.option("token"));
+        await discord.sendMessage(selectedChannelId, message, Settings.option("token"));
     }
     catch (err) {
         showError(err);
@@ -225,25 +251,9 @@ async function getVoiceTranscription() {
     });
 }
 
-function getVoiceRecording() {
-    return "Recorded Boop";
-}
-
 function showError(err) {
     errorCard.body = "" + err;
     errorCard.show();
-}
-
-function populateContacts(contacts) {
-    var items = contacts.map(function(contact) {
-        var name = contact.name;
-        if (!name) {
-            name = contact.recipients.map(r => r.username).join(", ");
-        }
-        return { title: name, contactId: contact.id };
-    });
-    items.unshift({ title: "Servers", mode: "guilds" });
-    contactsMenu.items(0, items);
 }
 
 function populateResponses(responses) {
@@ -264,15 +274,13 @@ function getResponses() {
 }
 
 async function init() {
-    var contacts = Settings.data("contacts");
     var token = Settings.option("token");
     var responses = getResponses();
 
     var hasToken = !!token;
-    var hasContacts = !!(contacts && contacts.length);
     var hasResponses = !!responses.length;
 
-    if(!(hasToken && hasContacts && hasResponses)){
+    if(!(hasToken && hasResponses)){
         configPromptCard.show();
         return;
     }
@@ -280,8 +288,7 @@ async function init() {
     gateway = new discord.Gateway(token);
     gateway.connect();
 
-    await populateContacts(contacts);
     await populateResponses(responses);
-    contactsMenu.show();
+    mainMenu.show();
 }
 init().catch(console.error);

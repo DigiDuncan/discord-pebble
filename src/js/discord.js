@@ -132,7 +132,6 @@ class Channel {
         this.name = c.name || c.recipients.map(r => r.username).join(", ");
         this.lastMessageId = null;
         this.setLastMessageId(c.last_message_id);
-        this.author = c.author;
         this.messages = [];
     }
 
@@ -183,6 +182,7 @@ class Message {
         this.guildId = m.guild_id;
         this.content = m.content;
         this.timestamp = m.timestamp;
+        this.author = m.author && m.author.username;
     }
 }
 
@@ -263,6 +263,18 @@ class Gateway {
         this.guilds = data.guilds.map(g => new Guild(g));
     }
 
+    getGuildChannels(guildId) {
+        if (!guildId) {
+            return this.dmChannels;
+        }
+        const guild = this.guilds.find(g => g.id === guildId);
+        if (!guild) {
+            console.error("Unknown guild id: ", guildId);
+            throw new Error("Unknown guild id: " + guildId);
+        }
+        return guild.channels;
+    }
+
     getGuild(guildId) {
         const guild = this.guilds.find(g => g.id === guildId);
         if (!guild) {
@@ -273,15 +285,7 @@ class Gateway {
     }
 
     getChannel(guildId, channelId) {
-        let channels;
-        if (guildId) {
-            const guild = this.getGuild(guildId);
-            channels = guild.channels;
-        }
-        else {
-            channels = this.dmChannels;
-        }
-
+        const channels = this.getGuildChannels(guildId);
         const channel = channels.find(c => c.id === channelId);
         if (!channel) {
             console.error("Unknown channel id: ", channelId);
