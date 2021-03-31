@@ -1,26 +1,41 @@
-var ajaxsync = require("ajax");
+const ajaxsync = require("./lib/ajax");
 
-async function ajax(params) {
+const ajax = async function(params) {
     return new Promise(function(resolve, reject) {
         ajaxsync(params, resolve, reject);
     });
-}
+};
 
-module.exports.getContacts = async function(token){
+const API_ROOT = "https://discord.com/api";
+
+const discordREST = async function(method, token, path, options) {
+    var ajaxURL = API_ROOT + path;
+    var ajaxHeaders = { "Authorization": token };
+    var ajaxParams = { url: ajaxURL, type: "json", method: method, headers: ajaxHeaders };
+    if (options && options.data) {
+        ajaxParams.data = options.data;
+    }
+    return await ajax(ajaxParams);
+};
+
+const REST = {
+    get: (token, path, options) => discordREST("get", token, path, options),
+    post: (token, path, options) => discordREST("post", token, path, options),
+    delete: (token, path, options) => discordREST("delete", token, path, options),
+    put: (token, path, options) => discordREST("put", token, path, options),
+    patch: (token, path, options) => discordREST("patch", token, path, options)
+};
+
+const getContacts = async function(token){
     console.log("getting contacts");
-
-    var ajaxURL = "https://discord.com/api/users/@me/channels";
-    var ajaxHeaders = { "Authorization" : token};
-    var ajaxParams = { url: ajaxURL, type: "json", method: "get", headers: ajaxHeaders };
-
     try {
-        var contacts = await ajax(ajaxParams);
+        var contacts = await REST.get(token, "/users/@me/channels");
     }
     catch (err) {
-        console.error("getting contacts failed " + JSON.stringify(err));
+        console.error("getting contacts failed ", err);
         throw err;
     }
-    console.log("getting contacts succeeded!");
+    console.log(`getting contacts succeeded! ${contacts.length} contacts found.`);
 
     // sort contacts based on who messaged last
     contacts.sort(function(a, b){
@@ -34,19 +49,289 @@ module.exports.getContacts = async function(token){
     return contacts;
 };
 
-module.exports.sendMessage = async function sendMessage(contactId, message, token) {
-    var ajaxURL = "https://discordapp.com/api/channels/" + contactId + "/messages";
-    var ajaxHeaders = { "Authorization" : token };
-    var ajaxData = { "content" : message };
-    var ajaxParams = { url: ajaxURL, type: "json", method: "post", data: ajaxData, headers: ajaxHeaders };
-
+const sendMessage = async function(contactId, message, token) {
     console.log("sending message");
+    var data = { content: message };
     try {
-        await ajax(ajaxParams);
+        await REST.post(token, `/channels/${contactId}/messages`, { data: data });
     }
     catch (err) {
-        console.log("sending message failed" + JSON.stringify(err) );
+        console.error("sending message failed", err);
         throw err;
     }
     console.log("message sent!");
+};
+
+const getMessages = async function(channelId, token) {
+    console.log("getting messages");
+    try {
+        await REST.get(token, `/channels/${channelId}/messages`);
+    }
+    catch (err) {
+        console.error("getting messages failed", err);
+        throw err;
+    }
+    console.log("message gotten!");
+};
+
+const INTENTS = {
+    GUILDS: 1 << 0,
+    GUILD_MEMBERS: 1 << 1,
+    GUILD_BANS: 1 << 2,
+    GUILD_EMOJIS: 1 << 3,
+    GUILD_INTEGRATIONS: 1 << 4,
+    GUILD_WEBHOOKS: 1 << 5,
+    GUILD_INVITES: 1 << 6,
+    GUILD_VOICE_STATES: 1 << 7,
+    GUILD_PRESENCES: 1 << 8,
+    GUILD_MESSAGES: 1 << 9,
+    GUILD_MESSAGE_REACTIONS: 1 << 10,
+    GUILD_MESSAGE_TYPING: 1 << 11,
+    DIRECT_MESSAGES: 1 << 12,
+    DIRECT_MESSAGE_REACTIONS: 1 << 13,
+    DIRECT_MESSAGE_TYPING: 1 << 14
+};
+
+class Guild {
+    constructor(g) {
+        this.id = g.id;
+        this.name = g.name;
+        this.channels = g.channels
+            .filter(c => Channel.isText(c))
+            .map(c => new Channel(c));
+    }
+}
+
+class Channel {
+    constructor(c) {
+        this.id = c.id;
+        this.name = c.name || c.recipients.map(r => r.username).join(", ");
+        this.lastMessageId = c.last_message_id;
+        this.author = c.author;
+        this.messages = [];
+    }
+
+    onMessageCreate(msg) {
+        this.messages.push(msg);
+        if (this.messages.length > 25) {
+            this.messages.unshift();
+        }
+    }
+
+    onMessageUpdate(msg) {
+        const existingMsg = this.messages.find(m => m.id === msg.id);
+        if (!existingMsg) {
+            return;
+        }
+        existingMsg.content = msg.content;
+    }
+
+    onMessageDelete(msg) {
+        const msgIndex = this.messages.findIndex(m => m.id === msg.id);
+        if (msgIndex === -1) {
+            return;
+        }
+        this.messages.splice(msgIndex, 1);
+    }
+
+    static isText(c) {
+        return c.type !== 2
+            && c.type !== 4
+            && c.type !== 6;
+    }
+}
+
+class Message {
+    constructor(m) {
+        this.id = m.id;
+        this.channelId = m.channel_id;
+        this.guildId = m.guild_id;
+        this.content = m.content;
+        this.timestamp = m.timestamp;
+    }
+}
+
+class Gateway {
+    constructor(token) {
+        this.ws = null;
+        this.token = token;
+        this.seq = null;
+        this.heartbeatId = null;
+        this.dmChannels = [];
+    }
+
+    connect() {
+        if (this.ws) {
+            throw new Error("Cannot reconnect to existing connection");
+        }
+        console.log("Connecting to discord");
+        this.ws = new WebSocket("wss://gateway.discord.gg/?encoding=json&v=8");
+        this.ws.addEventListener("message", this.onGatewayMessage.bind(this));
+    }
+
+    send(data) {
+        console.log("Sending:", data);
+        this.ws.send(JSON.stringify(data));
+    }
+
+    startHeartbeat(interval) {
+        if (interval === undefined) {
+            console.error("Attempted to start a heartbeat with an undefined interval");
+            return;
+        }
+        if (this.heartbeatId) {
+            console.warn("Attempted to start an already running heartbeat");
+            return;
+        }
+        this.heartbeatId = setInterval(this.heartbeat.bind(this), interval);
+    }
+
+    stopHeartbeat() {
+        clearInterval(this.heartbeatId);
+    }
+
+    heartbeat() {
+        // console.log("Sending heartbeat");
+        this.send({
+            "op": 1,
+            "d": this.seq
+        });
+    }
+
+    onGatewayOpen() {
+        console.log("Connected!");
+    }
+
+    onHello(data) {
+        this.startHeartbeat(data.heartbeat_interval);
+        var helloReply = {
+            "op": 2,
+            "d": {
+                "token": this.token,
+                "properties": {
+                    "$browser": "pebble"
+                },
+                "intents": INTENTS.GUILDS | INTENTS.GUILD_MESSAGES | INTENTS.DIRECT_MESSAGES,
+                "guild_subscriptions": false
+            }
+        };
+        this.send(helloReply);
+    }
+
+    onReady(data) {
+        //var meta = {};
+        //Object.entries(data).forEach(([k, v]) => meta[k] = Array.isArray(v) ? `[${v.length}]` : typeof v);
+        // console.log("READY", meta);
+
+        this.dmChannels = data.private_channels.map(c => new Channel(c));
+
+        this.guilds = data.guilds.map(g => new Guild(g));
+    }
+
+    getGuild(guildId) {
+        const guild = this.guilds.find(g => g.id === guildId);
+        if (!guild) {
+            console.error("Unknown guild id: ", guildId);
+            throw new Error("Unknown guild id: " + guildId);
+        }
+        return guild;
+    }
+
+    getChannel(guildId, channelId) {
+        let channels;
+        if (guildId) {
+            const guild = this.getGuild(guildId);
+            channels = guild.channels;
+        }
+        else {
+            channels = this.dmChannels;
+        }
+
+        const channel = channels.find(c => c.id === channelId);
+        if (!channel) {
+            console.error("Unknown channel id: ", channelId);
+            throw new Error("Unknown channel id: " + channelId);
+        }
+        return channel;
+    }
+
+    onMessageCreate(data) {
+        const msg = new Message(data);
+        const channel = this.getChannel(msg.guildId, msg.channelId);
+        channel.onMessageCreate(msg);
+        //console.log("New Message:", msg);
+    }
+
+    onMessageUpdate(data) {
+        var msg = new Message(data);
+        const channel = this.getChannel(msg.guildId, msg.channelId);
+        channel.onMessageUpdate(msg);
+        //console.log("Updated Message:", msg);
+    }
+
+    onMessageDelete(data) {
+        var msg = new Message(data);
+        const channel = this.getChannel(msg.guildId, msg.channelId);
+        channel.onMessageDelete(msg);
+        //console.log("Deleted Message:", msg);
+    }
+
+    onDispatch(event, data) {
+        const dispatchMap = {
+            "READY": this.onReady,
+            "MESSAGE_CREATE": this.onMessageCreate,
+            "MESSAGE_UPDATE": this.onMessageUpdate,
+            "MESSAGE_DELETE": this.onMessageDelete
+        };
+
+        const ignore = ["PRESENCE_UPDATE", "SESSIONS_REPLACE"];
+
+        const fn = dispatchMap[event];
+        if (fn) {
+            fn.call(this, data);
+        }
+        else if (ignore.includes(event)) {
+            // do nothing
+        }
+        else {
+            console.log("UNHANDLED EVENT", event, Object.keys(data));
+        }
+    }
+
+    onGatewayMessage(event) {
+        const payload = JSON.parse(event.data);
+        if (payload.op === 0) {
+            this.seq = payload.s;
+            this.onDispatch(payload.t, payload.d);
+        }
+        else if (payload.op === 1) {
+            // console.log("heartbeat", payload);
+            this.heartbeat();
+        }
+        else if (payload.op === 7) {
+            console.log("reconnect", payload);
+        }
+        else if (payload.op === 9) {
+            console.log("invalid session", payload);
+            this.stopHeartbeat();
+            this.ws.close();
+        }
+        else if (payload.op === 10) {
+            // console.log("hello", payload);
+            this.onHello(payload.d);
+        }
+        else if (payload.op === 11) {
+            // console.log("heartbeat ack", payload);
+        }
+        else {
+            console.log("unknown payload", payload);
+        }
+    }
+}
+
+module.exports = {
+    getContacts,
+    sendMessage,
+    getMessages,
+    Gateway
 };

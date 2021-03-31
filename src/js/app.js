@@ -213,6 +213,10 @@ async function init() {
         configPromptCard.show();
         return;
     }
+
+    var d = new discord.Gateway(token);
+    d.connect();
+
     await populateContacts(contacts);
     await populateResponses(responses);
     contactsMenu.show();

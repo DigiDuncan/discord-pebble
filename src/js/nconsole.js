@@ -26,6 +26,7 @@ const prep_message = function(msg, args) {
     args.unshift(msg);
     var out = prefix + args.join(" ");
     out = stripUnicode(out);
+    out = out.slice(0, 20000);
     return out;
 };
 
