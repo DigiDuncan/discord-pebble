@@ -166,6 +166,23 @@ messageCard.on("show", function() {
     showMessage(m);
 });
 
+messageCard.on("click", "select", function() {
+    if (messageCard.scrollable()) {
+        messageCard.status({
+            color: "black",
+            backgroundColor: "white"
+        });
+        messageCard.scrollable(false);
+    }
+    else {
+        messageCard.status({
+            color: "white",
+            backgroundColor: "black"
+        });
+        messageCard.scrollable(true);
+    }
+});
+
 messageCard.on("click", "up", function() {
     const channel = client.getGuild(selectedGuildId).channels.get(selectedChannelId);
     const m = channel.getPrevMessageById(selectedMessageId);
