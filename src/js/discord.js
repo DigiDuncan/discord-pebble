@@ -5,6 +5,8 @@ const ajax = async function(params) {
         ajaxsync(params, resolve, reject);
     });
 };
+ajax.formify = ajaxsync.formify;
+ajax.deformify = ajaxsync.deformify;
 
 const clamp = function(min, val, max) {
     return Math.max(min, Math.min(val, max));
@@ -29,6 +31,111 @@ const REST = {
     put: (token, path, options) => discordREST("put", token, path, options),
     patch: (token, path, options) => discordREST("patch", token, path, options)
 };
+
+const Snowflake = function(s) {
+    if (!s) {
+        return undefined;
+    }
+    return s.padStart(20, "0");
+};
+
+class MapById extends Map {
+    constructor(items) {
+        super();
+        this.addMany(items);
+    }
+
+    add(item) {
+        this.set(item.id, item);
+    }
+
+    addMany(items) {
+        if (!items) {
+            return;
+        }
+        items.forEach(i => this.add(i));
+    }
+}
+
+class MessageQueue {
+    constructor(limit) {
+        this.limit = limit;
+        this.queue = [];
+    }
+
+    add(item) {
+        let index = this.queue.findIndex(i => i.id > item.id);
+        if (index === -1) {
+            index = this.queue.length;
+        }
+        this.queue.splice(index, 0, item);
+        const overflow = this.queue.length - this.limit;
+        if (overflow > 0) {
+            this.queue.splice(0, overflow);
+        }
+    }
+
+    update(item) {
+        const existing = this.getById(item.id);
+        if (!existing) {
+            return;
+        }
+        existing.content = item.content;
+    }
+
+    delete(id) {
+        const index = this.queue.findIndex(m => m.id === id);
+        if (index === -1) {
+            return;
+        }
+        this.queue.splice(index, 1);
+    }
+
+    get(index) {
+        return this.queue[index];
+    }
+
+    getPrevById(id) {
+        let index = this.queue.findIndex(i => i.id === id);
+        if (index === -1) {
+            index = 0;
+        }
+        else if (index > 0) {
+            index -= 1;
+        }
+        return this.queue[index];
+    }
+
+    getById(id) {
+        return this.queue.find(i => i.id === id);
+    }
+
+    getNextById(id) {
+        let index = this.queue.findIndex(i => i.id === id);
+        if (index === -1) {
+            index = 0;
+        }
+        else if (index < this.queue.length - 1) {
+            index += 1;
+        }
+        return this.queue[index];
+    }
+
+    get length() {
+        return this.queue.length;
+    }
+
+    get emptySlots() {
+        return this.limit - this.queue.length;
+    }
+
+    get lastMessageId() {
+        if (this.queue.length === 0) {
+            return undefined;
+        }
+        return this.queue[this.queue.length - 1].lastMessageId;
+    }
+}
 
 const getContacts = async function(token){
     console.log("getting contacts");
@@ -64,18 +171,6 @@ const sendMessage = async function(contactId, message, token) {
         throw err;
     }
     console.log("message sent!");
-};
-
-const getMessages = async function(channelId, token) {
-    console.log("getting messages");
-    try {
-        await REST.get(token, `/channels/${channelId}/messages`);
-    }
-    catch (err) {
-        console.error("getting messages failed", err);
-        throw err;
-    }
-    console.log("message gotten!");
 };
 
 const INTENTS = {
@@ -118,102 +213,66 @@ const compareId = function(a_id, b_id) {
     }
 };
 
-class Guild {
-    constructor(g) {
-        this.id = g.id;
-        this.name = g.name;
-        this.lastMessageId = null;
-        this.channels = g.channels
-            .filter(c => Channel.isText(c))
-            .map(c => new Channel(c, this));
-    }
-}
-
-class Channel {
-    constructor(c, guild) {
-        this.guild = guild;
-        this.id = c.id;
-        this.name = c.name || c.recipients.map(r => r.username).join(", ");
-        this.lastMessageId = null;
-        this.setLastMessageId(c.last_message_id);
-        this.messages = [];
-    }
-
-    getMessage(id) {
-        let msg = this.messages.find(m => m.id === id) || this.messages[0];
-        return msg;
-    }
-
-    getPrevMessage(id) {
-        const msgIndex = this.messages.findIndex(m => m.id === id);
-        const prevMsgIndex = clamp(0, msgIndex - 1, this.messages.length - 1);
-        return this.messages[prevMsgIndex];
-    }
-
-    getNextMessage(id) {
-        const msgIndex = this.messages.findIndex(m => m.id === id);
-        const nextMsgIndex = clamp(0, msgIndex + 1, this.messages.length - 1);
-        return this.messages[nextMsgIndex];
-    }
-
-    setLastMessageId(id) {
-        this.lastMessageId = id;
-        if (this.guild) {
-            if (this.guild.lastMessageId == null || this.guild.lastMessageId < id) {
-                this.guild.lastMessageId = id;
-            }
-        }
-    }
-
-    onMessageCreate(msg) {
-        this.messages.push(msg);
-        this.setLastMessageId(msg.id);
-        if (this.messages.length > 25) {
-            this.messages.unshift();
-        }
-    }
-
-    onMessageUpdate(msg) {
-        const existingMsg = this.messages.find(m => m.id === msg.id);
-        if (!existingMsg) {
-            return;
-        }
-        existingMsg.content = msg.content;
-    }
-
-    onMessageDelete(msg) {
-        const msgIndex = this.messages.findIndex(m => m.id === msg.id);
-        if (msgIndex === -1) {
-            return;
-        }
-        this.messages.splice(msgIndex, 1);
-    }
-
-    static isText(c) {
-        return c.type !== 2
-            && c.type !== 4
-            && c.type !== 6;
-    }
-}
-
-class Message {
-    constructor(m) {
-        this.id = m.id;
-        this.channelId = m.channel_id;
-        this.guildId = m.guild_id;
-        this.content = m.content;
-        this.timestamp = m.timestamp;
-        this.author = m.author && m.author.username;
-    }
-}
-
-class Gateway {
+class Client {
     constructor(token) {
-        this.ws = null;
         this.token = token;
+        this.restClient = new RestClient(this);
+        this.gatewayClient = new GatewayClient(this);
+        this.guilds = new MapById();
+        this.dmChannels = new MapById();
+    }
+
+    connect() {
+        this.gatewayClient.connect();
+    }
+
+    disconnect() {
+        this.gatewayClient.disconnect();
+    }
+
+    getGuild(id) {
+        if (id === null) {
+            return { channels: this.dmChannels };
+        }
+        return this.guilds.get(id);
+    }
+}
+
+const getQueryParams = function(fields, options) {
+    if (!options) {
+        return {};
+    }
+    let queryParams = {};
+    fields
+        .filter(f => options[f] !== undefined)
+        .forEach(f => queryParams[f] = options[f]);
+    return queryParams;
+};
+
+class RestClient {
+    constructor(client) {
+        this.client = client;
+    }
+
+    async getMessages(channelId, options) {
+        const queryParams = getQueryParams(["around", "before", "after", "limit"], options);
+        let paramsString = ajaxsync.formify(queryParams);
+        if (paramsString) {
+            paramsString = "?" + paramsString;
+        }
+        const url = `/channels/${channelId}/messages${paramsString}`;
+        const response = await REST.get(this.client.token, url);
+        const messages = response.map(m => new Message(m));
+        return messages;
+    }
+}
+
+class GatewayClient {
+    constructor(client) {
+        this.client = client;
+        this.ws = null;
         this.seq = null;
         this.heartbeatId = null;
-        this.dmChannels = [];
     }
 
     connect() {
@@ -223,6 +282,11 @@ class Gateway {
         console.log("Connecting to discord");
         this.ws = new WebSocket("wss://gateway.discord.gg/?encoding=json&v=8");
         this.ws.addEventListener("message", this.onGatewayMessage.bind(this));
+    }
+
+    disconnect() {
+        this.stopHeartbeat();
+        this.ws.close();
     }
 
     send(data) {
@@ -263,7 +327,7 @@ class Gateway {
         var helloReply = {
             "op": 2,
             "d": {
-                "token": this.token,
+                "token": this.client.token,
                 "properties": {
                     "$browser": "pebble"
                 },
@@ -279,78 +343,45 @@ class Gateway {
         //Object.entries(data).forEach(([k, v]) => meta[k] = Array.isArray(v) ? `[${v.length}]` : typeof v);
         // console.log("READY", meta);
 
-        this.dmChannels = data.private_channels.map(c => new Channel(c));
+        const dmChannels = data.private_channels.map(c => new Channel(this.client, null, c));
+        this.client.dmChannels.addMany(dmChannels);
 
-        this.guilds = data.guilds.map(g => new Guild(g));
-    }
-
-    getGuildChannels(guildId) {
-        if (!guildId) {
-            return this.dmChannels;
-        }
-        const guild = this.guilds.find(g => g.id === guildId);
-        if (!guild) {
-            console.error("Unknown guild id: ", guildId);
-            throw new Error("Unknown guild id: " + guildId);
-        }
-        return guild.channels;
-    }
-
-    getGuild(guildId) {
-        const guild = this.guilds.find(g => g.id === guildId);
-        if (!guild) {
-            console.error("Unknown guild id: ", guildId);
-            throw new Error("Unknown guild id: " + guildId);
-        }
-        return guild;
-    }
-
-    getChannel(guildId, channelId) {
-        const channels = this.getGuildChannels(guildId);
-        const channel = channels.find(c => c.id === channelId);
-        if (!channel) {
-            console.error("Unknown channel id: ", channelId);
-            throw new Error("Unknown channel id: " + channelId);
-        }
-        return channel;
+        const guilds = data.guilds.map(g => new Guild(this.client, g));
+        this.client.guilds.addMany(guilds);
     }
 
     onMessageCreate(data) {
         const msg = new Message(data);
-        const channel = this.getChannel(msg.guildId, msg.channelId);
-        channel.onMessageCreate(msg);
-        //console.log("New Message:", msg);
+        const channel = this.client.guilds.get(msg.guildId).channels.get(msg.channelId);
+        channel.addMessage(msg);
     }
 
     onMessageUpdate(data) {
-        var msg = new Message(data);
-        const channel = this.getChannel(msg.guildId, msg.channelId);
-        channel.onMessageUpdate(msg);
-        //console.log("Updated Message:", msg);
+        const msg = new Message(data);
+        const channel = this.client.guilds.get(msg.guildId).channels.get(msg.channelId);
+        channel.updateMessage(msg);
     }
 
     onMessageDelete(data) {
-        var msg = new Message(data);
-        const channel = this.getChannel(msg.guildId, msg.channelId);
-        channel.onMessageDelete(msg);
-        //console.log("Deleted Message:", msg);
+        const msg = new Message(data);
+        const channel = this.client.guilds.get(msg.guildId).channels.get(msg.channelId);
+        channel.deleteMessage(msg);
     }
 
     onDispatch(event, data) {
-        const dispatchMap = {
-            "READY": this.onReady,
-            "MESSAGE_CREATE": this.onMessageCreate,
-            "MESSAGE_UPDATE": this.onMessageUpdate,
-            "MESSAGE_DELETE": this.onMessageDelete
-        };
+        const dispatchMap = new Map([
+            ["READY", this.onReady],
+            ["MESSAGE_CREATE", this.onMessageCreate],
+            ["MESSAGE_UPDATE", this.onMessageUpdate],
+            ["MESSAGE_DELETE", this.onMessageDelete]
+        ]);
 
-        const ignore = ["PRESENCE_UPDATE", "SESSIONS_REPLACE"];
+        const ignore = new Set(["PRESENCE_UPDATE", "SESSIONS_REPLACE"]);
 
-        const fn = dispatchMap[event];
-        if (fn) {
-            fn.call(this, data);
+        if (dispatchMap.has(event)) {
+            dispatchMap.get(event).call(this, data);
         }
-        else if (ignore.includes(event)) {
+        else if (ignore.has(event)) {
             // do nothing
         }
         else {
@@ -358,8 +389,8 @@ class Gateway {
         }
     }
 
-    onGatewayMessage(event) {
-        const payload = JSON.parse(event.data);
+    onGatewayMessage(wsevent) {
+        const payload = JSON.parse(wsevent.data);
         if (payload.op === 0) {
             this.seq = payload.s;
             this.onDispatch(payload.t, payload.d);
@@ -373,8 +404,7 @@ class Gateway {
         }
         else if (payload.op === 9) {
             console.log("invalid session", payload);
-            this.stopHeartbeat();
-            this.ws.close();
+            this.client.disconnect();
         }
         else if (payload.op === 10) {
             // console.log("hello", payload);
@@ -389,10 +419,106 @@ class Gateway {
     }
 }
 
+class Guild {
+    constructor(client, g) {
+        this.client = client;
+        this.id = Snowflake(g.id);
+        this.name = g.name;
+        this.lastMessageId = null;
+        this.channels = new MapById();
+
+        const channelsToAdd = g.channels
+            .filter(c => Channel.isText(c))
+            .map(c => new Channel(this.client, this, c));
+        this.channels.addMany(channelsToAdd);
+    }
+}
+
+class Channel {
+    constructor(client, guild, c) {
+        this.client = client;
+        this.guild = guild;
+        this.id = Snowflake(c.id);
+        this.name = c.name || c.recipients.map(r => r.username).join(", ");
+        this.setLastMessageId(Snowflake(c.last_message_id));
+        this.messages = new MessageQueue(25);
+    }
+
+    async getMessages() {
+        if (this.messages.emptySlots > 0) {
+            var options = {
+                limit: this.messages.emptySlots
+            };
+            var oldestMessage = this.messages[0];
+            if (oldestMessage) {
+                options.before = oldestMessage.id;
+            }
+            let newMessages = await this.client.restClient.getMessages(this.id, options);
+            newMessages.forEach(m => this.addMessage(m));
+        }
+        return this.messages.queue;
+    }
+
+    getMessage(index) {
+        return this.messages.get(index);
+    }
+
+    getMessageById(id) {
+        return this.messages.getById(id);
+    }
+
+    getPrevMessageById(id) {
+        return this.messages.getPrevById(id);
+    }
+
+    getNextMessageById(id) {
+        return this.messages.getNextById(id);
+    }
+
+    get lastMessageId() {
+        return this.messages.lastMessageId;
+    }
+
+    setLastMessageId(id) {
+        if (this.guild) {
+            if (!this.guild.lastMessageId || this.guild.lastMessageId < id) {
+                this.guild.lastMessageId = id;
+            }
+        }
+    }
+
+    addMessage(msg) {
+        this.messages.add(msg);
+        this.setLastMessageId(msg.id);
+    }
+
+    updateMessage(msg) {
+        this.messages.update(msg);
+    }
+
+    deleteMessage(msg) {
+        this.messages.delete(msg.id);
+    }
+
+    static isText(c) {
+        return c.type !== 2
+            && c.type !== 4
+            && c.type !== 6;
+    }
+}
+
+class Message {
+    constructor(m) {
+        this.id = Snowflake(m.id);
+        this.channelId = Snowflake(m.channel_id);
+        this.guildId = Snowflake(m.guild_id);
+        this.content = m.content;
+        this.timestamp = m.timestamp;
+        this.author = m.author && m.author.username;
+    }
+}
+
 module.exports = {
-    getContacts,
-    sendMessage,
-    getMessages,
-    Gateway,
+    Client,
     compareId
 };

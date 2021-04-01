@@ -12,9 +12,9 @@ var Clay = require("clay");
 var clayConfig = require("config");
 var clay = new Clay(clayConfig, null, {autoHandleEvents: false});
 var discord = require("discord");
-var utils = require("utils");
+var { by, delay } = require("utils");
 
-var gateway;
+var client;
 var selectedGuildId = null;
 var selectedChannelId = null;
 var selectedMessageId = null;
@@ -82,8 +82,8 @@ var guildsMenu = new UI.Menu({
 guildsMenu.on("show", async function() {
     selectedGuildId = null;
     selectedChannelId = null;
-    const items = gateway.guilds
-        .sort((a, b) => discord.compareId(b.lastMessageId, a.lastMessageId))
+    const items = Array.from(client.guilds.values())
+        .sort(by("lastMessageId"))
         .map(g => ({ title: g.name, guildId: g.id }));
     guildsMenu.items(0, items);
 });
@@ -104,8 +104,8 @@ var channelsMenu = new UI.Menu({
 
 channelsMenu.on("show", async function() {
     selectedChannelId = null;
-    const items = gateway.getGuildChannels(selectedGuildId)
-        .sort((a, b) => discord.compareId(b.lastMessageId, a.lastMessageId))
+    const items = Array.from(client.getGuild(selectedGuildId).channels.values())
+        .sort(by("lastMessageId"))
         .map(c => ({ title: c.name, channelId: c.id }));
     channelsMenu.items(0, items);
 });
@@ -124,9 +124,9 @@ var messagesMenu = new UI.Menu({
     highlightTextColor: "white"
 });
 
-messagesMenu.on("show", function() {
-    const channel = gateway.getChannel(selectedGuildId, selectedChannelId);
-    const items = channel.messages
+messagesMenu.on("show", async function() {
+    const channel = client.getGuild(selectedGuildId).channels.get(selectedChannelId);
+    const items = (await channel.getMessages())
         .map(m => ({ title: m.author, subtitle: m.content, messageId: m.id }));
     messagesMenu.section(0, {
         title: channel.name,
@@ -151,21 +151,21 @@ const showMessage = function(m) {
 };
 
 messageCard.on("show", function() {
-    const channel = gateway.getChannel(selectedGuildId, selectedChannelId);
-    const m = channel.getMessage(selectedMessageId);
+    const channel = client.getGuild(selectedGuildId).channels.get(selectedChannelId);
+    const m = channel.getMessageById(selectedMessageId);
     showMessage(m);
 });
 
 messageCard.on("click", "up", function() {
-    const channel = gateway.getChannel(selectedGuildId, selectedChannelId);
-    const m = channel.getPrevMessage(selectedMessageId);
+    const channel = client.getGuild(selectedGuildId).channels.get(selectedChannelId);
+    const m = channel.getPrevMessageById(selectedMessageId);
     selectedMessageId = m.id;
     showMessage(m);
 });
 
 messageCard.on("click", "down", function() {
-    const channel = gateway.getChannel(selectedGuildId, selectedChannelId);
-    const m = channel.getNextMessage(selectedMessageId);
+    const channel = client.getGuild(selectedGuildId).channels.get(selectedChannelId);
+    const m = channel.getNextMessageById(selectedMessageId);
     selectedMessageId = m.id;
     showMessage(m);
 });
@@ -186,7 +186,7 @@ var notQuiteYetMenu = new UI.Card({
 });
 
 notQuiteYetMenu.on("show", async function() {
-    await utils.delay(1000);
+    await delay(1000);
     notQuiteYetMenu.hide();
 });
 
@@ -204,7 +204,7 @@ var sentMessageCard = new UI.Card({
 
 sentMessageCard.on("show", async function(){
     sendingMessageCard.hide();
-    await utils.delay(1000);
+    await delay(1000);
     sentMessageCard.hide();
 });
 
@@ -311,8 +311,8 @@ async function init() {
         return;
     }
 
-    gateway = new discord.Gateway(token);
-    gateway.connect();
+    client = new discord.Client(token);
+    client.connect();
 
     await populateResponses(responses);
     mainMenu.show();
