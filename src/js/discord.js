@@ -215,8 +215,8 @@ class Client {
         this.dmChannels = new MapById();
     }
 
-    connect() {
-        this.gatewayClient.connect();
+    async connect() {
+        await this.gatewayClient.connect();
     }
 
     disconnect() {
@@ -266,15 +266,20 @@ class GatewayClient {
         this.ws = null;
         this.seq = null;
         this.heartbeatId = null;
+        this.connectPromise = {
+            resolve: null,
+            reject: null
+        };
     }
 
-    connect() {
+    async connect() {
         if (this.ws) {
             throw new Error("Cannot reconnect to existing connection");
         }
         console.log("Connecting to discord");
         this.ws = new WebSocket("wss://gateway.discord.gg/?encoding=json&v=8");
         this.ws.addEventListener("message", this.onGatewayMessage.bind(this));
+        return new Promise((resolve, reject) => this.connectPromise = {resolve, reject});
     }
 
     disconnect() {
@@ -341,6 +346,8 @@ class GatewayClient {
 
         const guilds = data.guilds.map(g => new Guild(this.client, g));
         this.client.guilds.addMany(guilds);
+
+        this.connectPromise.resolve();
     }
 
     onMessageCreate(data) {

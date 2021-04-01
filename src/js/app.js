@@ -1,3 +1,4 @@
+var Vector2 = require("vector2");
 var nconsole = require("nconsole");
 console.debug = nconsole.debug;
 console.info = nconsole.info;
@@ -13,6 +14,7 @@ var clayConfig = require("config");
 var clay = new Clay(clayConfig, null, {autoHandleEvents: false});
 var discord = require("discord");
 var { by, delay } = require("utils");
+const { util } = require("config");
 
 var client;
 var selectedGuildId = null;
@@ -31,14 +33,23 @@ var configPromptCard = new UI.Card({
     titleColor: "black"
 });
 
-var loadingCard = new UI.Card({
-    title: "Please wait...",
-    titleColor: "black"
-});
+// Loading window
 
-loadingCard.on("show", async function(){
-    configPromptCard.hide();
+var loadingWindow = new UI.Window();
+
+var loadingWindowTitle = new UI.Text({
+    text: "Connecting...",
+    textAlign: "center",
+    position: new Vector2(0, 20),
+    size: loadingWindow.size()
 });
+loadingWindow.add(loadingWindowTitle);
+
+var loadingWindowSpinner = new UI.Circle({
+    position: new Vector2(0, 80),
+    radius: 5
+});
+loadingWindow.add(loadingWindowSpinner);
 
 // Main Menu
 
@@ -253,13 +264,7 @@ Pebble.addEventListener("webviewclosed", async function(e) {
     var token = Settings.option("token");
     token = token.replace(/['"]+/g, "");
     Settings.option("token", token);
-
-    loadingCard.show();
-
-    var responses = getResponses();
-
-    await populateResponses(responses);
-    loadingCard.hide();
+    configPromptCard.hide();
 });
 
 responsesMenu.on("select", async function(selection){
@@ -328,20 +333,27 @@ function getResponses() {
 
 async function init() {
     var token = Settings.option("token");
-    var responses = getResponses();
-
-    var hasToken = !!token;
-    var hasResponses = !!responses.length;
-
-    if(!(hasToken && hasResponses)){
-        configPromptCard.show();
+    if(!token){
+        console.log("no token");
+        //configPromptCard.show();
         return;
     }
 
+    loadingWindow.show();
+    function wiggle(next) {
+        loadingWindowSpinner.animate("position", new Vector2(loadingWindow.size().x - 10, 80), 1000);
+        loadingWindowSpinner.animate("position", new Vector2(10, 80), 1000);
+        loadingWindowSpinner.queue(wiggle);
+        console.log("wiggled");
+        if (next) {
+            next();
+        }
+    }
+    wiggle();
     client = new discord.Client(token);
-    client.connect();
+    await client.connect();
+    loadingWindow.hide();
 
-    await populateResponses(responses);
     mainMenu.show();
 }
 init().catch(console.error);
