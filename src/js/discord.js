@@ -128,13 +128,6 @@ class MessageQueue {
     get emptySlots() {
         return this.limit - this.queue.length;
     }
-
-    get lastMessageId() {
-        if (this.queue.length === 0) {
-            return undefined;
-        }
-        return this.queue[this.queue.length - 1].lastMessageId;
-    }
 }
 
 const getContacts = async function(token){
@@ -440,6 +433,8 @@ class Channel {
         this.guild = guild;
         this.id = Snowflake(c.id);
         this.name = c.name || c.recipients.map(r => r.username).join(", ");
+        this.position = c.position;
+        this.lastMessageId = undefined;
         this.setLastMessageId(Snowflake(c.last_message_id));
         this.messages = new MessageQueue(25);
     }
@@ -475,11 +470,10 @@ class Channel {
         return this.messages.getNextById(id);
     }
 
-    get lastMessageId() {
-        return this.messages.lastMessageId;
-    }
-
     setLastMessageId(id) {
+        if (!this.lastMessageId || this.lastMessageId < id) {
+            this.lastMessageId = id;
+        }
         if (this.guild) {
             if (!this.guild.lastMessageId || this.guild.lastMessageId < id) {
                 this.guild.lastMessageId = id;
@@ -498,6 +492,10 @@ class Channel {
 
     deleteMessage(msg) {
         this.messages.delete(msg.id);
+    }
+
+    get sortId() {
+        return this.lastMessageId || this.id;
     }
 
     static isText(c) {

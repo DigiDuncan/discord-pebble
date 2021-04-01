@@ -4,13 +4,7 @@ const delay = function(ms) {
 
 const by = function(field) {
     return function(a, b) {
-        if (a[field] === undefined) {
-            return 1;
-        }
-        else if (b[field] === undefined) {
-            return -1;
-        }
-        else if (a[field] === b[field]) {
+        if (a[field] === b[field]) {
             return 0;
         }
         else if (a[field] < b[field]) {

@@ -84,6 +84,7 @@ guildsMenu.on("show", async function() {
     selectedChannelId = null;
     const items = Array.from(client.guilds.values())
         .sort(by("lastMessageId"))
+        .reverse()
         .map(g => ({ title: g.name, guildId: g.id }));
     guildsMenu.items(0, items);
 });
@@ -104,9 +105,14 @@ var channelsMenu = new UI.Menu({
 
 channelsMenu.on("show", async function() {
     selectedChannelId = null;
-    const items = Array.from(client.getGuild(selectedGuildId).channels.values())
-        .sort(by("lastMessageId"))
-        .map(c => ({ title: c.name, channelId: c.id }));
+    var items = Array.from(client.getGuild(selectedGuildId).channels.values());
+    if (selectedGuildId) {
+        items.sort(by("position"));
+    }
+    else {
+        items.sort(by("sortId")).reverse();
+    }
+    items = items.map(c => ({ title: c.name, subtitle: c.position, channelId: c.id }));
     channelsMenu.items(0, items);
 });
 
