@@ -118,6 +118,7 @@ channelsMenu.on("show", async function() {
 
 channelsMenu.on("select", async function(selection) {
     selectedChannelId = selection.item.channelId;
+    messagesMenu.firstShow = true;
     messagesMenu.show();
 });
 
@@ -138,7 +139,10 @@ messagesMenu.on("show", async function() {
         title: channel.name,
         items: items
     });
-    messagesMenu.selection(0, items.length - 1);
+    if (messagesMenu.firstShow) {
+        messagesMenu.firstShow = false;
+        messagesMenu.selection(0, items.length - 1);
+    }
 });
 
 messagesMenu.on("select", function(selection) {
